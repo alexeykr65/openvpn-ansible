@@ -5,10 +5,11 @@
 - Enable sudo for adminvpn
 - Install python (exist /usr/bin/python)
 
+### How to use
 After run playbook, create users for openvpn:
 - login to ubuntu as `adminvpn`
-- `cd easyrsa`
-- run script sudo `./create-users.sh name_user`
-- copy file *name_user.ovpn*  from directory *~/client-configs/files/*
+- change directory `cd easyrsa`
+- run script  `sudo ./create-users.sh name_user`
+- copy file *name_user.ovpn*  from directory *~/client-configs/files/* to local and import to openvpn
 
 
