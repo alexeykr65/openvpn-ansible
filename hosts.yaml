@@ -5,12 +5,10 @@ openvpn:
       ansible_host: 172.16.55.136
   vars:
     ansible_user: adminvpn
-    # ansible_become: true
+#    ansible_become: true
     ansible_become_pass: cisco123
-#        ansible_ssh_pass: cisco
-#        ansible_network_os: ios
-  # vars:
-  #   ansible_connection: network_cli
+#    ansible_ssh_pass: cisco
+#    ansible_network_os: ios
 
 
 
