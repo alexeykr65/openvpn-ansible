@@ -1,13 +1,9 @@
 ---
 - name: Configure Openvpn on Ubuntu 18.04
   hosts: all
-  # connection: local
   gather_facts: false
   user: adminvpn
 
-
-#  vars_files:
-#    - "src_cfg/vagrant_01.yml"
   
   tasks:
     - name: Install Openvpn
@@ -17,12 +13,6 @@
         state: present
         force: yes
         update_cache: yes
-
-    # - name: Download EasyRSA
-    #   get_url: 
-    #     url: https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.4/EasyRSA-3.0.4.tgz
-    #     dest: /home/adminvpn/easyrsa.tgz
-    #     owner: adminvpn
 
     - name: Download and Unarchive EasyRSA-3.0.4
       unarchive: 
@@ -148,13 +138,6 @@
       with_items:
         - 'keys'
         - 'files'
-
-    # - name: Copy files ta.key to clients directory
-    #   # become: no
-    #   copy: 
-    #     src: /home/adminvpn/easyrsa/ta.key
-    #     dest: /home/adminvpn/client-configs/key/
-    #     remote_src: yes
 
     - name: Copy files ta.key and ca.crt to clients directory
       become: yes
