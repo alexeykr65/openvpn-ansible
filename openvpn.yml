@@ -1,0 +1,209 @@
+---
+- name: Configure Openvpn on Ubuntu 18.04
+  hosts: all
+  # connection: local
+  gather_facts: false
+  user: adminvpn
+
+
+#  vars_files:
+#    - "src_cfg/vagrant_01.yml"
+  
+  tasks:
+    - name: Install Openvpn
+      become: yes
+      apt:
+        name: openvpn
+        state: present
+        force: yes
+        update_cache: yes
+
+    # - name: Download EasyRSA
+    #   get_url: 
+    #     url: https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.4/EasyRSA-3.0.4.tgz
+    #     dest: /home/adminvpn/easyrsa.tgz
+    #     owner: adminvpn
+
+    - name: Download and Unarchive EasyRSA-3.0.4
+      unarchive: 
+        src: https://github.com/OpenVPN/easy-rsa/releases/download/v3.0.4/EasyRSA-3.0.4.tgz
+        dest: /home/adminvpn/
+        creates: /home/adminvpn/easyrsa
+        remote_src: yes
+
+    - name: Rename directory EasyRSA-3.0.4 to easyrsa
+      command: mv EasyRSA-3.0.4 easyrsa
+ #     become: no
+      args:
+        creates: /home/adminvpn/easyrsa
+
+    - name: Copy file vars.example to vars
+      copy: 
+        src: /home/adminvpn/easyrsa/vars.example
+        dest: /home/adminvpn/easyrsa/vars
+        owner: adminvpn
+        force: no
+        remote_src: yes
+
+    - name: Change organization field of file vars
+#      become: no
+      lineinfile:
+        path: /home/adminvpn/easyrsa/vars
+        regexp: '{{item.From}}'
+        line: '{{item.To}}'
+        state: present  
+      with_items:
+       - { From: '#set_var\sEASYRSA_REQ_COUNTRY\s*"US"', To: 'set_var EASYRSA_REQ_COUNTRY    "RU"'}
+       - { From: '#set_var\sEASYRSA_REQ_PROVINCE\s*".*"', To: 'set_var EASYRSA_REQ_PROVINCE    "Moscow"'}
+       - { From: '#set_var\sEASYRSA_REQ_CITY\s*".*"', To: 'set_var EASYRSA_REQ_CITY    "Moscow"'}
+       - { From: '#set_var\sEASYRSA_REQ_ORG\s*".*"', To: 'set_var EASYRSA_REQ_ORG    "Home"'}
+       - { From: '#set_var\sEASYRSA_REQ_EMAIL\s*".*"', To: 'set_var EASYRSA_REQ_EMAIL    "alex@mail.net"'}
+       - { From: '#set_var\sEASYRSA_REQ_OU\s*".*"', To: 'set_var EASYRSA_REQ_OU    "ItCroud"'}
+       - { From: '#set_var\sEASYRSA_REQ_CN\s*".*"', To: 'set_var EASYRSA_REQ_CN    "ItCroud"'}
+
+    - name: Initialize PKI 
+      command: /home/adminvpn/easyrsa/easyrsa init-pki
+#      become: no
+      args:
+        chdir: /home/adminvpn/easyrsa
+        creates: /home/adminvpn/easyrsa/pki
+
+    - name: Create random file .rnd 
+      command: dd if=/dev/urandom of=easyrsa/pki/.rnd bs=256 count=1
+#      become: no
+      args:
+        creates: /home/adminvpn/easyrsa/pki/.rnd
+
+    - name: Generate ca.crt ca.key
+      command: /home/adminvpn/easyrsa/easyrsa --batch build-ca nopass
+ #     become: no
+      args:
+        creates: /home/adminvpn/easyrsa/pki/ca.crt
+        chdir: /home/adminvpn/easyrsa
+
+    - name: Copy file ca.crt to /etc/openvpn
+      become: yes
+      copy: 
+        src: /home/adminvpn/easyrsa/pki/ca.crt
+        dest: /etc/openvpn/
+        owner: root
+        mode: '0600'
+        remote_src: yes
+
+    - name: Generate server request
+      command: /home/adminvpn/easyrsa/easyrsa --batch gen-req server nopass
+      args:
+        creates: /home/adminvpn/easyrsa/pki/reqs/server.req
+        chdir: /home/adminvpn/easyrsa
+
+    - name: Sign server request
+      command: /home/adminvpn/easyrsa/easyrsa --batch sign-req server server
+      args:
+        creates: /home/adminvpn/easyrsa/pki/issued/server.crt
+        chdir: /home/adminvpn/easyrsa
+
+    - name: Copy file server.crt and server.key  to /etc/openvpn
+      become: yes
+      copy: 
+        src: /home/adminvpn/easyrsa/pki/{{item}}
+        dest: /etc/openvpn/
+        owner: root
+        mode: '0600'
+        remote_src: yes
+      with_items:
+        - 'issued/server.crt'
+        - 'private/server.key'
+
+    - name: Generate gen-dh
+      command: /home/adminvpn/easyrsa/easyrsa --batch gen-dh
+  #    become: no
+      args:
+        creates: /home/adminvpn/easyrsa/pki/dh.pem
+        chdir: /home/adminvpn/easyrsa
+
+    - name: Generate openvpn key
+      command: /usr/sbin/openvpn --genkey --secret ta.key
+      become: yes
+      args:
+        creates: /home/adminvpn/easyrsa/ta.key
+        chdir: /home/adminvpn/easyrsa
+
+    - name: Copy files ta.key and dh.pem to /etc/openvpn
+      become: yes
+      copy: 
+        src: "/home/adminvpn/easyrsa/{{ item }}"
+        dest: /etc/openvpn/
+        owner: root
+        mode: '0600'
+        remote_src: yes
+      with_items:
+        - 'ta.key'
+        - 'pki/dh.pem'
+
+    - name: Create clients directory
+      file:
+        path: /home/adminvpn/client-configs/{{item}}
+        state: directory
+        mode: '0700'
+      with_items:
+        - 'keys'
+        - 'files'
+
+    # - name: Copy files ta.key to clients directory
+    #   # become: no
+    #   copy: 
+    #     src: /home/adminvpn/easyrsa/ta.key
+    #     dest: /home/adminvpn/client-configs/key/
+    #     remote_src: yes
+
+    - name: Copy files ta.key and ca.crt to clients directory
+      become: yes
+      copy: 
+        src: /home/adminvpn/easyrsa/{{ item }}
+        dest: /home/adminvpn/client-configs/keys/
+        owner: adminvpn
+        remote_src: yes
+      with_items:
+        - 'ta.key'
+        - 'pki/ca.crt'
+
+    - name: Copy script for create users to remote machine
+      copy: 
+        src: create-users.sh
+        dest: /home/adminvpn/easyrsa/
+        owner: adminvpn
+        mode: '0755'
+
+    - name: Copy Openvpn configuration(server.conf) to remote machine (/etc/openvpn)
+      become: yes
+      copy: 
+        src: server.conf
+        dest: /etc/openvpn
+        owner: root
+        mode: '0600'
+
+    - name: Change sysctl.conf to forward packets (net.ipv4.ip_forward=1)
+      become: yes
+      replace:
+        path: /etc/sysctl.conf
+        regexp: '#net.ipv4.ip_forward=1'
+        replace: 'net.ipv4.ip_forward=1'
+
+    - name: Restart service sysctl
+      become: yes
+      command: /sbin/sysctl -p /etc/sysctl.conf
+
+    - name: Enable service openvpn@server
+      become: yes
+      command: '{{ item }}'
+      with_items:
+        - 'systemctl enable openvpn@server'
+        - 'systemctl start openvpn@server'
+    
+    - name: Copy client file base.conf to client-configs
+      become: yes
+      copy: 
+        src: base.conf
+        dest: /home/adminvpn/client-configs/
+        owner: adminvpn
+        mode: '0600'

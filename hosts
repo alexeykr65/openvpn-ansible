@@ -1,0 +1,2 @@
+[openvpn]
+server ansible_host=172.16.55.136
